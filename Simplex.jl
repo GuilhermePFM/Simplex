@@ -30,7 +30,10 @@ function SimplexFase2(A, b, c)
         xn = zeros(length(nidx))
         d = B \ b
         D = B \ N
+
         xb = d - D * xn
+        x[bidx] = xb
+        x[nidx] = xn
 
         # separa os custos em basicos/nao basicos
         cn = c[nidx]
@@ -46,15 +49,21 @@ function SimplexFase2(A, b, c)
 
             x = zeros(n)
             x[bidx] = xb
+            # escreve o log
+            simplex_log(it, x, B, bidx, z, status, stream)
+            break
         end
         
         # testa ilimitado
         for i in 1:m
-            if all(D[:, i] .<= zeros(m))
+            if all(D[:, i] .<= zeros(m)) && cr[i] > 0
                 status = -1
 
                 x = zeros(n)
                 x[nidx] = D[:, i]
+                # escreve o log
+                simplex_log(it, x, B, bidx, z, status, stream)
+                break
             end
         end
 
