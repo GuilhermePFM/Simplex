@@ -48,7 +48,7 @@ function SimplexFase2(A, b, c)
        simplex_log(it, x, B, bidx, nidx, z, status, stream)
 
         # testa otimo global
-        if maximum(cr) < 0
+        if maximum(cr) <= 0
             status = 1
 
             x = zeros(n)
@@ -143,7 +143,8 @@ function SimplexFase1(A, b, c)
         if it == 1
             nvbidx = length(nidx)
         else
-            nvbidx = indmax(cr)
+            # nvbidx = indmax(cr)
+            nvbidx = indmin(cr)
         end
         # seleciona a variavel basica que sai
         nvnidx = indmin(xb ./ abs.(db[:,nvbidx]))
@@ -161,10 +162,10 @@ function SimplexFase1(A, b, c)
 
         # testa ilimitado
         for i in 1:m
-            if all(db[:, i] .<= zeros(m)) && cr[i] > 0
+            if all(db[:, i] .<= zeros(m)) && cr[i] < 0
                 status = -1
 
-                x = zeros(n)
+                x = zeros(n+1)
                 x[nidx] = db[:, i]
                 # escreve o log
                 # simplex_log(it, x, B, bidx, z, status, stream)
@@ -193,17 +194,16 @@ function SimplexFase1(A, b, c)
     return A1, b, c1, status
 end
 
-function Simplex()
+function Simplex(A,b,c)
     A1, b, c1, status = SimplexFase1(A, b, c)
-    A= A1
-    c=c1
+    
     if status == 1
        SimplexFase2(A1, b, c1)
     else
         println("Unbounded problem.")
     end
-
 end
+
 function open_log()
     fname = "SimplexFase2.log"
     if isfile(fname)
@@ -259,7 +259,7 @@ c = [1 ; 1; 0; 0]
 x,z,status = SimplexFase2(A, b, c)
 
 # c) Prob 3 - fase 1
-A = [2 1 1 0 0; 1 2 0 1 0; 1 1 0 0 -1]
-b = [4 ; 4 ; 1]
+A = [2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1]
+b = [4 ; 4 ; -1]
 c = [4 ; 3; 0; 0; 0]
 x,z,status = Simplex(A, b, c)
