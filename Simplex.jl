@@ -9,7 +9,7 @@ function SimplexFase2(A::Array, b::Array, c::Array)
 
     # separa em basicas/ nao basicas
     m, n = size(A)
-    nv = n - m
+    nv = n - m # numero de variaveis basicas
 
     nidx = [i for i in 1:nv]
     bidx = [i for i in (nv+1):(n)]
@@ -39,14 +39,22 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         # separa os custos em basicos/nao basicos
         cn = c[nidx]
         cb = c[bidx]
-
+        
         # calcula custos
         cr = cn' - cb' * db
         z = cb' * xb + (cr) * xn
-
+        
         # escreve o log
-       simplex_log(it, x, bidx, nidx, z, status, stream)
-
+        simplex_log(it, x, bidx, nidx, z, status, stream)
+        
+        # seleciona proxima variavel basica
+       nvbidx = indmax(cr)
+ 
+       # seleciona a variavel basica que sai
+       r = xb ./ abs.(db[:,nvbidx])
+       r[r .< 0] = NaN
+       nvnidx = indmin(r)
+        
         # testa otimo global
         if maximum(cr) <= 0
             status = 1
@@ -59,14 +67,21 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         end
         
         # testa ilimitado
-        for i in 1:nv
+        for i in 1:nv #size(db)[2]
             if all(db[:, i] .<= zeros(m)) && cr[i] > 0
                 status = -1
-
+        
+                # adiciona direcao extrema a base
+                old_bidx = bidx[:]
+                bidx[nvnidx] = nidx[i] 
+                nidx[i] = old_bidx[nvnidx]
+                
+                # calcula direcao extrema
                 x = zeros(n)
-                x[nidx] = db[:, i]
+                x[bidx] = -db[:, i]
+
                 # escreve o log
-                simplex_log(it, x, bidx, nidx, z, status, stream)
+                simplex_log(it, x, bidx, nidx, Inf, status, stream)
                 break
             end
         end
@@ -77,11 +92,6 @@ function SimplexFase2(A::Array, b::Array, c::Array)
             break
         end
 
-        # seleciona proxima variavel basica
-       nvbidx = indmax(cr)
-
-       # seleciona a variavel basica que sai
-       nvnidx = indmin(xb ./ abs.(db[:,nvbidx]))
 
        # descobre os verdadeiros indices das variaveis
        old_bidx = bidx[:]
@@ -101,7 +111,7 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
 
     # pega n de variaveis basicas/ nao basicas originais
     m, n = size(A)
-    nv = n - m # numero de variaveis nao basicas
+    nv = n - m # numero de variaveis basicas
     
     # adiciona a variavel de folga w
     Aw = -1 * ones(m, n + 1)
@@ -163,21 +173,7 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
             simplex_log(it, x, bidx, nidx, z, status, stream)
             break
         end
-
-        # testa ilimitado
-        for i in 1:(nv+1)
-            if all(db[:, i] .<= zeros(m)) && cr[i] < 0
-                status = -1
-
-                x = zeros(n+1)
-                x[nidx] = db[:, i]
-
-                # escreve o log
-                simplex_log(it, x, bidx, nidx, z, status, stream)
-                break
-            end
-        end
-
+       
         # descobre os verdadeiros indices das variaveis
         old_bidx = deepcopy(bidx)
         bidx[nvnidx] = nidx[nvbidx] 
@@ -208,7 +204,7 @@ function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
     if status == 1
        SimplexFase2(A1, b, c1)
     else
-        println("Unbounded problem.")
+        println("Unfeasible problem.")
     end
 end
 
