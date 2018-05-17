@@ -122,9 +122,9 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     
     # escolhendo como basicas as slacks das desigualdades    
     x = zeros(n+1)
-    bidx = [i for i in (nv+1):(n)]
-    nidx = [i for i in 1:(n+1) if !(i in bidx)]
-    
+    nidx = [i for i in (nv+1):(n)]
+    bidx = [i for i in 1:(n+1) if !(i in bidx)]
+        
     status = 3 
     it = 0
     while status > 1
@@ -181,8 +181,8 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     end
 
     # reorder original matrix
-    orig_bidx = [i for i in bidx if i!=(n+1)]
-    orig_nidx = [i for i in nidx if i!=(n+1)]
+    bidx_out = [i for i in bidx if i!=(n+1)]
+    nidx_out = [i for i in nidx if i!=(n+1)]
 
     A1 = zeros(size(A))
     A1[:, 1:length(orig_nidx)] = A[:,orig_nidx] 
