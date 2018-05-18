@@ -4,7 +4,7 @@
 
 # Guilherme Pereira Freire Machado
 
-function SimplexFase2(A::Array, b::Array, c::Array) 
+function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0]) 
     stream = get_log(2)
 
     # separa em basicas/ nao basicas
@@ -34,6 +34,9 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         BAj = B \ N
         db = BAj
         
+        # x[bidx] = B \ b
+        # x[nidx] = zeros(length(nidx))
+
         # separa os custos em basicos/nao basicos
         cn = c[nidx]
         cb = c[bidx]
@@ -52,11 +55,15 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         # testa otimo global
         if maximum(cr) <= 0
             status = 1
-
-            x = zeros(n)
-            x[bidx] = xb
-
+            if length(norder) > 1
+                new_x = zeros(x)
+                for i in 1:length(x)
+                    new_x[norder[i]] = x[i]
+                end
+               x = new_x
+            end
             # escreve o log
+            pwrite(stream, "Reordenando: ")
             simplex_log(it, x, bidx, nidx, z, status, stream)
             break
         end
@@ -191,19 +198,26 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     c1 = zeros(n)
     c1[1:length(nidx_out)] = c[nidx_out]
     c1[(length(nidx_out)+1):end] = c[bidx_out]
+    
+    new_idx = ones(Int, n)
+    new_idx[1:length(nidx_out)] = nidx_out
+    new_idx[ (length(nidx_out)+1):n] = bidx_out
 
+    pwrite(stream, "Novas matrizes:")
+    pwrite(stream, "A = $A1")
+    pwrite(stream, "c = $c1")
     close(stream)
-    return A1, b, c1, status
+    return A1, b, c1, status, new_idx
 end
 
 function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
     # Init logger
     open_log(A, b, c)
 
-    A1, b, c1, status = SimplexFase1(A, b, c)
+    A1, b, c1, status, norder = SimplexFase1(A, b, c)
     
     if status == 1
-       SimplexFase2(A1, b, c1)
+       SimplexFase2(A1, b, c1, norder=norder)
     else
         println("Unfeasible problem.")
     end
