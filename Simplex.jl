@@ -148,12 +148,13 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     Aw[:,1:n] = A
     bw = b
     cw = zeros(n+1)
-    cw[n+1] = 1
+    cw[n+1] = -1
     
     # escolhendo como basicas as slacks das desigualdades    
     x = zeros(n+1)
-    nidx = [i for i in (nv+1):(n)]
-    bidx = [i for i in 1:(n+1) if !(i in bidx)]
+    bidx = [i for i in (nv+1):(n)]
+    nidx = [i for i in 1:(n+1) if !(i in bidx) ]
+    xn = zeros(length(nidx))
         
     status = 3 
     it = 0
@@ -165,7 +166,6 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         N = Aw[:, nidx]
         
         # resolve as demais variaveis
-        xn = zeros(length(nidx))
         d = B \ b
         db = B \ N
 
@@ -184,18 +184,18 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
 
         # seleciona proxima variavel basica
         if it == 1
-            nvbidx = length(nidx)
+            j = length(nidx)
         else
-            nvbidx = indmin(cr)
+            j = indmax(cr)
         end
 
         # seleciona a variavel basica que sai
-        r = xb ./ db[:, nvbidx]
-        r[r .> 0] = NaN
-        nvnidx = indmin(r)
+        r = xb ./ db[:, j]
+        r[r .< 0] = NaN
+        i = indmin(r)
         
         # testa otimo global
-        if minimum(cr) >= 0 && it > 1
+        if maximum(cr) <= 0 && it > 1
             status = 1
 
             x = zeros(n+1)
@@ -208,8 +208,8 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
        
         # descobre os verdadeiros indices das variaveis
         old_bidx = deepcopy(bidx)
-        bidx[nvnidx] = nidx[nvbidx] 
-        nidx[nvbidx] = old_bidx[nvnidx]
+        bidx[i] = nidx[j] 
+        nidx[j] = old_bidx[i]
     end
 
     # reorder original matrix
@@ -217,11 +217,11 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     nidx_out = [i for i in nidx if i!=(n+1)]
 
     A1 = zeros(size(A))
-    A1[:, 1:length(orig_nidx)] = A[:,orig_nidx] 
-    A1[:, (length(orig_nidx)+1):n] = A[:, orig_bidx] 
+    A1[:, 1:length(nidx_out)] = A[:,nidx_out] 
+    A1[:, (length(nidx_out)+1):n] = A[:, bidx_out] 
     c1 = zeros(n)
-    c1[1:length(orig_nidx)] = c[orig_nidx]
-    c1[(length(orig_nidx)+1):end] = c[orig_bidx]
+    c1[1:length(nidx_out)] = c[nidx_out]
+    c1[(length(nidx_out)+1):end] = c[bidx_out]
 
     close(stream)
     return A1, b, c1, status
