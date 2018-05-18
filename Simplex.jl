@@ -10,93 +10,123 @@ function SimplexFase2(A::Array, b::Array, c::Array)
     # separa em basicas/ nao basicas
     m, n = size(A)
     nv = n - m # numero de variaveis basicas
-
+    
     nidx = [i for i in 1:nv]
     bidx = [i for i in (nv+1):(n)]
+    
+    # resolve valores iniciais de x
+    x = zeros(n)
+    x[bidx] = A[:, bidx] \ b
 
     # inicia loop de solucao
     status = 3
     z = 0
-    x = zeros(n)
     it = 0
     maxit = 100
     while status > 1
         it += 1
-
+        
         # seleciona base
         B = A[:, bidx]
         N = A[:, nidx]
         
-        # resolve as demais variaveis
-        xn = zeros(length(nidx))
-        d = B \ b
-        db = B \ N
-
-        xb = d - db * xn
-        x[bidx] = xb
-        x[nidx] = xn
-
+        # matriz direcao
+        BAj = B \ N
+        db = BAj
+        
         # separa os custos em basicos/nao basicos
         cn = c[nidx]
         cb = c[bidx]
         
+        xb = x[bidx]
+        xn = x[nidx]
+        
         # calcula custos
         cr = cn' - cb' * db
+
         z = cb' * xb + (cr) * xn
-        
+
         # escreve o log
         simplex_log(it, x, bidx, nidx, z, status, stream)
-        
-        # seleciona proxima variavel basica
-       nvbidx = indmax(cr)
- 
-       # seleciona a variavel basica que sai
-       r = xb ./ abs.(db[:,nvbidx])
-       r[r .< 0] = NaN
-       nvnidx = indmin(r)
-        
+                
         # testa otimo global
         if maximum(cr) <= 0
             status = 1
 
             x = zeros(n)
             x[bidx] = xb
+
             # escreve o log
             simplex_log(it, x, bidx, nidx, z, status, stream)
             break
         end
         
-        # testa ilimitado
-        for i in 1:nv #size(db)[2]
-            if all(db[:, i] .<= zeros(m)) && cr[i] > 0
-                status = -1
+        # testa infeasible
+        # if any(xb + theta_ * db_ .< zeros(m))
+        #     println("infeasible")
+        #     break
+        # end
+
         
-                # adiciona direcao extrema a base
-                old_bidx = bidx[:]
-                bidx[nvnidx] = nidx[i] 
-                nidx[i] = old_bidx[nvnidx]
-                
-                # calcula direcao extrema
-                x = zeros(n)
-                x[bidx] = -db[:, i]
-
-                # escreve o log
-                simplex_log(it, x, bidx, nidx, Inf, status, stream)
-                break
-            end
-        end
-
         if it > maxit
             status = -2
             pwrite(stream, "Maximum number of iterations exceded! Solution not found.")
             break
         end
+        
+        # seleciona proxima variavel basica
+        j = indmax(cr)
+        
+        # seleciona a variavel basica que sai
+        r = xb ./ db[:, j]
+        r[r .< 0] = NaN
+        i = indmin(r)
+        theta = r[i]
+        
+        # testa ilimitado
+        # for j in 1:m
+        if isnan(theta) #all(db[:, j] .<= zeros(m))
+            status = -1
+            
+            # calcula direcao extrema
+            r =  - xb ./ db[:, j]
+            # maior gradiente
+            i = indmax(r) 
+            # theta = r[i]
+    
+            # atualiza indices das variaveis
+            old_bidx = bidx[:]
+            bidx[i] = nidx[j] 
+            nidx[j] = old_bidx[i]
+            
+            B = A[:, bidx]
+            N = A[:, nidx]
+            
+            # atualiza x 
+            x = zeros(n)
+            x[bidx] = - B \ N[:, j]
+            x = x / minimum(x[bidx])
+            # # escreve o log
+            simplex_log(it+1, x, bidx, nidx, Inf, status, stream)
+            break
+        end
+        # end
 
+        # theta
+        # db_ = - B^-1 * A[:, nidx[nvbidx]]
+        # cr_ = cn'[nvbidx] - cb' * db_
+        # r_ = - xb ./ db_
+        # r_[r_ .< 0] = NaN
+        # theta_ = r_[indmin(r_)]
 
-       # descobre os verdadeiros indices das variaveis
-       old_bidx = bidx[:]
-       bidx[nvnidx] = nidx[nvbidx] 
-       nidx[nvbidx] = old_bidx[nvnidx]
+        # atualiza x 
+        x[nidx[j]] = theta # novo j
+        x[bidx] = x[bidx] - theta * db[:, j]
+       
+        # atualiza indices das variaveis
+        old_bidx = bidx[:]
+        bidx[i] = nidx[j] 
+        nidx[j] = old_bidx[i]
     end
 
     #x: o ponto ótimo (ou direção extrema se ilimitado),
@@ -160,7 +190,9 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         end
 
         # seleciona a variavel basica que sai
-        nvnidx = indmin(xb ./ abs.(db[:,nvbidx]))
+        r = xb ./ db[:, nvbidx]
+        r[r .> 0] = NaN
+        nvnidx = indmin(r)
         
         # testa otimo global
         if minimum(cr) >= 0 && it > 1
@@ -299,3 +331,4 @@ A = float([2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1])
 b = float([4 ; 4 ; -1])
 c = float([4 ; 3; 0; 0; 0])
 x,z,status = Simplex(A, b, c)
+
