@@ -61,12 +61,6 @@ function SimplexFase2(A::Array, b::Array, c::Array)
             break
         end
         
-        # testa infeasible
-        # if any(xb + theta_ * db_ .< zeros(m))
-        #     println("infeasible")
-        #     break
-        # end
-        
         if it > maxit
             status = -2
             pwrite(stream, "Maximum number of iterations exceded! Solution not found.")
