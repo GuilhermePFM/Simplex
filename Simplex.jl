@@ -66,7 +66,6 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         #     println("infeasible")
         #     break
         # end
-
         
         if it > maxit
             status = -2
@@ -84,15 +83,13 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         theta = r[i]
         
         # testa ilimitado
-        # for j in 1:m
-        if isnan(theta) #all(db[:, j] .<= zeros(m))
+        if isnan(theta)
             status = -1
             
             # calcula direcao extrema
             r =  - xb ./ db[:, j]
             # maior gradiente
             i = indmax(r) 
-            # theta = r[i]
     
             # atualiza indices das variaveis
             old_bidx = bidx[:]
@@ -106,18 +103,11 @@ function SimplexFase2(A::Array, b::Array, c::Array)
             x = zeros(n)
             x[bidx] = - B \ N[:, j]
             x = x / minimum(x[bidx])
+
             # # escreve o log
             simplex_log(it+1, x, bidx, nidx, Inf, status, stream)
             break
         end
-        # end
-
-        # theta
-        # db_ = - B^-1 * A[:, nidx[nvbidx]]
-        # cr_ = cn'[nvbidx] - cb' * db_
-        # r_ = - xb ./ db_
-        # r_[r_ .< 0] = NaN
-        # theta_ = r_[indmin(r_)]
 
         # atualiza x 
         x[nidx[j]] = theta # novo j
