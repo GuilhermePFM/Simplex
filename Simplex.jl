@@ -210,7 +210,7 @@ function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
 end
 
 function open_log(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
-    fname = "SimplexFase2.log"
+    fname = "Simplex.log"
     if isfile(fname)
         stream = open(fname, "a")
         pwrite(stream, "=======================")
@@ -281,23 +281,33 @@ function pwrite(stream::IOStream, string::AbstractString)
     write(stream, string * "\n")
 end
 
-# 2)
+function problemas()
+    cd(pwd())
+    # 2)
 
-# a) Problema da Producao
-A = float([2 1 1 0; 1 2 0 1])
-b = float([4 ; 4])
-c = float([4 ; 3; 0; 0])
-x,z,status = SimplexFase2(A, b, c)
+    # a) Problema da Producao
+    println("a) Problema da Producao")
+    println("")
+    A = float([2 1 1 0; 1 2 0 1])
+    b = float([4 ; 4])
+    c = float([4 ; 3; 0; 0])
+    x,z,status = SimplexFase2(A, b, c)
+    
+    # b) Prob 2
+    println("b) Problema ilimitado")
+    println("")
+    A = float([0.5 -1 1 0; -4 1 0 1])
+    b = float([0.5 ; 1])
+    c = float([1 ; 1; 0; 0])
+    x,z,status = SimplexFase2(A, b, c)
+    
+    # c) Prob 3 - fase 1
+    println("c) Problema fase 1")
+    println("")
+    A = float([2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1])
+    b = float([4 ; 4 ; -1])
+    c = float([4 ; 3; 0; 0; 0])
+    x,z,status = Simplex(A, b, c)
+end
 
-# b) Prob 2
-A = float([0.5 -1 1 0; -4 1 0 1])
-b = float([0.5 ; 1])
-c = float([1 ; 1; 0; 0])
-x,z,status = SimplexFase2(A, b, c)
-
-# c) Prob 3 - fase 1
-A = float([2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1])
-b = float([4 ; 4 ; -1])
-c = float([4 ; 3; 0; 0; 0])
-x,z,status = Simplex(A, b, c)
-
+problemas()
