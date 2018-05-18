@@ -86,26 +86,11 @@ function SimplexFase2(A::Array, b::Array, c::Array)
         if isnan(theta)
             status = -1
             
-            # calcula direcao extrema
-            r =  - xb ./ db[:, j]
-            # maior gradiente
-            i = indmax(r) 
-    
-            # atualiza indices das variaveis
-            old_bidx = bidx[:]
-            bidx[i] = nidx[j] 
-            nidx[j] = old_bidx[i]
-            
-            B = A[:, bidx]
-            N = A[:, nidx]
-            
-            # atualiza x 
-            x = zeros(n)
-            x[bidx] = - B \ N[:, j]
-            x = x / minimum(x[bidx])
-
+            d = - db[:, j]
+            d[nidx[j]] = 1
+           
             # # escreve o log
-            simplex_log(it+1, x, bidx, nidx, Inf, status, stream)
+            simplex_log(it+1, d, bidx, nidx, Inf, status, stream)
             break
         end
 
