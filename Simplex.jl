@@ -109,7 +109,7 @@ function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0])
     #z: função objetivo no ponto ótimo, e
     #status: 1 se ótimo e -1 se ilimitado.
     close(stream)
-    return x, z, status
+    return x, z, status, it
 end
 
 function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}) 
@@ -314,7 +314,7 @@ function problemas()
     b = float([0.5 ; 1])
     c = float([1 ; 1; 0; 0])
     x,z,status = SimplexFase2(A, b, c)
-    
+
     # c) Prob 3 - fase 1
     println("c) Problema fase 1")
     println("")
