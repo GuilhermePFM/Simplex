@@ -4,7 +4,7 @@
 
 # Guilherme Pereira Freire Machado
 
-function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0]) 
+function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = [0]) 
     stream = get_log(2)
 
     # separa em basicas/ nao basicas
@@ -50,12 +50,14 @@ function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0])
         z = cb' * xb + (cr) * xn
 
         # escreve o log
-        simplex_log(it, x, bidx, nidx, z, status, stream)
+        simplex_log(it, x, bidx, nidx, z, status, stream, debug)
                 
         # testa otimo global
         if maximum(cr) <= 0
+            println("otimo")
             status = 1
             if length(norder) > 1
+                println("norder")
                 new_x = zeros(x)
                 for i in 1:length(x)
                     new_x[norder[i]] = x[i]
@@ -64,7 +66,7 @@ function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0])
             end
             # escreve o log
             pwrite(stream, "Reordenando: ")
-            simplex_log(it, x, bidx, nidx, z, status, stream)
+            simplex_log(it, x, bidx, nidx, z, status, stream, debug)
             break
         end
         
@@ -85,13 +87,14 @@ function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0])
         
         # testa ilimitado
         if isnan(theta)
+            println("ilimitado")
             status = -1
             
             d = - db[:, j]
             d[nidx[j]] = 1
            
             # # escreve o log
-            simplex_log(it+1, d, bidx, nidx, Inf, status, stream)
+            simplex_log(it+1, d, bidx, nidx, Inf, status, stream, debug)
             break
         end
 
@@ -112,24 +115,27 @@ function SimplexFase2(A::Array, b::Array, c::Array; norder::Array = [0])
     return x, z, status, it
 end
 
-function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}) 
+function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, debug=true) 
     stream = get_log(1)
 
     # pega n de variaveis basicas/ nao basicas originais
     m, n = size(A)
     nv = n - m # numero de variaveis basicas
     
+    # elimina  linhas com b negativo
+    A[b.<0,:] = -A[b.<0,:] 
+    b[b.<0,:] = -b[b.<0,:]
+
     # adiciona a variavel de folga w
-    Aw = -1 * ones(m, n + 1)
-    Aw[:,1:n] = A
+    Aw = [A eye(m)]
     bw = b
-    cw = zeros(n+1)
-    cw[n+1] = -1
+    cw = [zeros(n); -ones(m)]
     
     # escolhendo como basicas as slacks das desigualdades    
-    x = zeros(n+1)
-    bidx = [i for i in (nv+1):(n)]
-    nidx = [i for i in 1:(n+1) if !(i in bidx) ]
+    x = zeros(n+m)
+    art_idx = collect((n+m - nv):(n+m))
+    bidx = [i for i in (n+m - nv):(n+m)]
+    nidx = [i for i in 1:(n+m) if !(i in bidx) ]
     xn = zeros(length(nidx))
         
     status = 3 
@@ -156,7 +162,7 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         # calcula custos
         cr = cn' - cb' * db
         z = cb' * xb + (cr) * xn
-        simplex_log(it, x, bidx, nidx, z, status, stream)
+        simplex_log(it, x, bidx, nidx, z, status, stream, debug)
 
         # seleciona proxima variavel basica
         if it == 1
@@ -168,17 +174,22 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         # seleciona a variavel basica que sai
         r = xb ./ db[:, j]
         r[r .< 0] = NaN
+        r[r .== Inf] = NaN
         i = indmin(r)
         
         # testa otimo global
         if maximum(cr) <= 0 && it > 1
             status = 1
 
-            x = zeros(n+1)
+            x = zeros(n+m)
             x[bidx] = xb
 
+            if cb'*xb > 0
+                status = -2
+            end
+
             # escreve o log
-            simplex_log(it, x, bidx, nidx, z, status, stream)
+            simplex_log(it, x, bidx, nidx, z, status, stream, debug)
             break
         end
        
@@ -188,36 +199,66 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         nidx[j] = old_bidx[i]
     end
 
+    # fix artificial in basis
+    bidx, nidx = fix_artificial_var_in_B(A, bidx, nidx, art_idx)
+
     # reorder original matrix
-    bidx_out = [i for i in bidx if i!=(n+1)]
-    nidx_out = [i for i in nidx if i!=(n+1)]
+    bidx_out = [i for i in bidx if i<=(n)]
+    nidx_out = [i for i in nidx if i<=(n)]
 
     A1 = zeros(size(A))
-    A1[:, 1:length(nidx_out)] = A[:,nidx_out] 
-    A1[:, (length(nidx_out)+1):n] = A[:, bidx_out] 
+    A1[:, 1:length(bidx_out)] = A[:,bidx_out] 
+    A1[:, (length(bidx_out)+1):n] = A[:, nidx_out] 
     c1 = zeros(n)
-    c1[1:length(nidx_out)] = c[nidx_out]
-    c1[(length(nidx_out)+1):end] = c[bidx_out]
+    c1[1:length(bidx_out)] = c[bidx_out]
+    c1[(length(bidx_out)+1):end] = c[nidx_out]
     
     new_idx = ones(Int, n)
-    new_idx[1:length(nidx_out)] = nidx_out
-    new_idx[ (length(nidx_out)+1):n] = bidx_out
+    new_idx[1:length(bidx_out)] = bidx_out
+    new_idx[ (length(bidx_out)+1):n] = nidx_out
 
-    pwrite(stream, "Novas matrizes:")
-    pwrite(stream, "A = $A1")
-    pwrite(stream, "c = $c1")
+    if debug
+        pwrite(stream, "Novas matrizes:")
+        pwrite(stream, "A = $A1")
+        pwrite(stream, "c = $c1")
+    end
+
     close(stream)
     return A1, b, c1, status, new_idx
 end
 
-function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
+function fix_artificial_var_in_B(A, bidx, nidx, art_idx)
+    # eliminates redundant
+    art_in_b = [i for i in art_idx if i in bidx] 
+    for i in art_in_b
+        B = A[:, bidx]
+        test = B \ A
+
+        l = findin(bidx, i)
+        
+        if test[l,:] .== 0 # removes row
+            A[l,:] = zeros(size(A)[2])
+
+        else # change basis
+
+            j = findfirst(A[l,:])
+
+            old_bidx = deepcopy(bidx)
+            bidx[l] = nidx[j] 
+            nidx[j] = old_bidx[l]
+            end
+    end
+    return bidx, nidx
+end
+
+function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, debug=true)
     # Init logger
     open_log(A, b, c)
 
-    A1, b, c1, status, norder = SimplexFase1(A, b, c)
+    A1, b, c1, status, norder = SimplexFase1(A, b, c, debug)
     
     if status == 1
-       SimplexFase2(A1, b, c1, norder=norder)
+       SimplexFase2(A1, b, c1, debug, norder=norder)
     else
         println("Unfeasible problem.")
     end
@@ -266,32 +307,40 @@ function get_log(state::Int)
     return stream
 end
 
-function simplex_log(it::Int, x::Array{Float64,1}, bidx::Array{Int,1}, nidx::Array{Int,1}, z::Float64, status::Int, stream::IOStream)
-    pwrite(stream, "iter $it:")
-    pwrite(stream, "x = $x")
-    pwrite(stream, "Base = $bidx")
-    pwrite(stream, "Nbase = $nidx")
-    pwrite(stream, "")
+function simplex_log(it::Int, x::Array{Float64,1}, bidx::Array{Int,1}, nidx::Array{Int,1}, z::Float64, status::Int, stream::IOStream, debug=true)
+    pwrite(stream, "iter $it:", debug)
+    pwrite(stream, "x = $x", debug)
+    pwrite(stream, "Base = $bidx", debug)
+    pwrite(stream, "Nbase = $nidx", debug)
+    pwrite(stream, "", debug)
     
     if status == 1
-        pwrite(stream, "| Solucao otima obtida:")
-        pwrite(stream, "| ---------------------")
-        pwrite(stream, "| x = $x")
-        pwrite(stream, "| z = $z")
-        pwrite(stream, "| status = $status")
-        pwrite(stream, "")
+        pwrite(stream, "| Solucao otima obtida:", debug)
+        pwrite(stream, "| ---------------------", debug)
+        pwrite(stream, "| x = $x", debug)
+        pwrite(stream, "| z = $z", debug)
+        pwrite(stream, "| status = $status", debug)
+        pwrite(stream, "", debug)
     elseif status == -1
-        pwrite(stream, "| Solucao ilimitada obtida:")
-        pwrite(stream, "| -------------------------")
-        pwrite(stream, "| de = $x")
-        pwrite(stream, "| z = $z")
-        pwrite(stream, "| status = $status")
-        pwrite(stream, "")
+        pwrite(stream, "| Solucao ilimitada obtida:", debug)
+        pwrite(stream, "| -------------------------", debug)
+        pwrite(stream, "| de = $x", debug)
+        pwrite(stream, "| z = $z", debug)
+        pwrite(stream, "| status = $status", debug)
+        pwrite(stream, "", debug)
+    elseif status == -2
+        pwrite(stream, "| Solucao inviavel obtida:", debug)
+        pwrite(stream, "| -------------------------", debug)
+        pwrite(stream, "| z = $z", debug)
+        pwrite(stream, "| status = $status", debug)
+        pwrite(stream, "", debug)
     end
 end
 
-function pwrite(stream::IOStream, string::AbstractString)
-    println(string)
+function pwrite(stream::IOStream, string::AbstractString, debug)
+    if debug
+        println(string)
+    end
     write(stream, string * "\n")
 end
 
@@ -324,4 +373,4 @@ function problemas()
     x,z,status = Simplex(A, b, c)
 end
 
-problemas()
+#problemas()
