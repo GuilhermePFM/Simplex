@@ -133,9 +133,9 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     
     # escolhendo como basicas as slacks das desigualdades    
     x = zeros(n+m)
-    art_idx = collect((n+m - nv):(n+m))
-    bidx = [i for i in (n+m - nv):(n+m)]
-    nidx = [i for i in 1:(n+m) if !(i in bidx) ]
+    art_idx = collect((n+1):(n+m))
+    nidx = [i for i in (1):(size(Aw)[2] - size(Aw)[1])]
+    bidx = [i for i in 1:(n+m) if !(i in nidx) ]
     xn = zeros(length(nidx))
         
     status = 3 
@@ -200,22 +200,22 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     end
 
     # fix artificial in basis
-    bidx, nidx = fix_artificial_var_in_B(A, bidx, nidx, art_idx)
+    bidx, nidx = fix_artificial_var_in_B(Aw, bidx, nidx, art_idx)
 
     # reorder original matrix
     bidx_out = [i for i in bidx if i<=(n)]
     nidx_out = [i for i in nidx if i<=(n)]
 
     A1 = zeros(size(A))
-    A1[:, 1:length(bidx_out)] = A[:,bidx_out] 
-    A1[:, (length(bidx_out)+1):n] = A[:, nidx_out] 
+    A1[:, 1:length(nidx_out)] = A[:,nidx_out] 
+    A1[:, (length(nidx_out)+1):end] = A[:, bidx_out] 
     c1 = zeros(n)
-    c1[1:length(bidx_out)] = c[bidx_out]
-    c1[(length(bidx_out)+1):end] = c[nidx_out]
+    c1[1:length(nidx_out)] = c[nidx_out]
+    c1[(length(nidx_out)+1):end] = c[bidx_out]
     
     new_idx = ones(Int, n)
-    new_idx[1:length(bidx_out)] = bidx_out
-    new_idx[ (length(bidx_out)+1):n] = nidx_out
+    new_idx[1:length(nidx_out)] = nidx_out
+    new_idx[ (length(nidx_out)+1):n] = bidx_out
 
     if debug
         pwrite(stream, "Novas matrizes:")
@@ -227,25 +227,27 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     return A1, b, c1, status, new_idx
 end
 
-function fix_artificial_var_in_B(A, bidx, nidx, art_idx)
+function fix_artificial_var_in_B(Aw, bidx, nidx, art_idx)
     # eliminates redundant
     art_in_b = [i for i in art_idx if i in bidx] 
     for i in art_in_b
-        B = A[:, bidx]
-        test = B \ A
+        B = Aw[:, bidx]
+        test = B \ Aw
 
         l = findin(bidx, i)
         
-        if test[l,:] .== 0 # removes row
-            A[l,:] = zeros(size(A)[2])
+        if all(test[l,:] .== 0) # removes row
+            Aw[l,:] = zeros(size(Aw)[2])
 
         else # change basis
 
-            j = findfirst(A[l,:])
-
+            candidates = find(test[l,:])
+            candidates = [i for i in candidates if i in nidx && !(i in art_idx)]
+            j = candidates[1]
+            
             old_bidx = deepcopy(bidx)
             bidx[l] = nidx[j] 
-            nidx[j] = old_bidx[l]
+            nidx[j] = old_bidx[l][1]
             end
     end
     return bidx, nidx
