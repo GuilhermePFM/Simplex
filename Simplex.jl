@@ -81,8 +81,17 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
         
         # seleciona a variavel basica que sai
         r = xb ./ db[:, j]
-        r[r .< 0] = NaN
-        i = indmin(r)
+        # r[r .<= 0] = NaN
+        # i = indmin(r)
+        i=1
+        if it == 1
+            r[r .<= 0] = NaN
+            i = indmin(r)
+        else
+            i = lexicographic_smallest(N, db[:, j])
+        end
+
+        # r[r .<= 0] = NaN
         theta = r[i]
         
         # testa ilimitado
@@ -173,10 +182,15 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
 
         # seleciona a variavel basica que sai
         r = xb ./ db[:, j]
-        r[r .< 0] = NaN
-        r[r .== Inf] = NaN
-        i = indmin(r)
-        
+        i=1
+        if it == 1
+            r[r .<= 0] = NaN
+            r[r .== Inf] = NaN
+            i = indmin(r)
+        else
+            i = lexicographic_smallest(N, db[:, j])
+        end
+
         # testa otimo global
         if maximum(cr) <= 0 && it > 1
             status = 1
@@ -185,6 +199,7 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
             x[bidx] = xb
 
             if cb'*xb > 0
+                print()
                 status = -2
             end
 
@@ -227,6 +242,32 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     return A1, b, c1, status, new_idx
 end
 
+function lexicographic_smallest(N, Aj)
+    # N = [1  0  5  3; 2  4  6  -1; 3  0  7  9]
+    # Aj = [3 -1 9]
+    
+    r = zeros(size(N))
+    for i in 1:size(N)[1]
+        if Aj[i] != 0
+            r[i,:] = N[i,:] ./ Aj[i]
+        else
+            r[i,:] = NaN
+        end
+    end
+    
+    # inicia vetor
+    smallest = r[1,:]
+    index = 1
+    for i in 1:size(r)[1] # elimina NaN caso exista na inicializacao
+        if all(r[i,:] .>= 0) && all(r[i,:] .!= Inf) && lexless(r[i,:], smallest)
+            smallest = r[i,:]
+            index = i
+        end
+    end
+
+    return index
+end
+
 function fix_artificial_var_in_B(Aw, bidx, nidx, art_idx)
     # eliminates redundant
     art_in_b = [i for i in art_idx if i in bidx] 
@@ -258,9 +299,10 @@ function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, 
     open_log(A, b, c)
 
     A1, b, c1, status, norder = SimplexFase1(A, b, c, debug)
-    
+    A=A1
+    c=c1
     if status == 1
-       SimplexFase2(A1, b, c1, debug, norder=norder)
+       return SimplexFase2(A1, b, c1, debug, norder=norder)
     else
         println("Unfeasible problem.")
     end
