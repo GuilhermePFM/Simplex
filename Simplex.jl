@@ -4,6 +4,10 @@
 
 # Guilherme Pereira Freire Machado
 
+using LinearAlgebra
+
+include("SimplexLog.jl")
+
 function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = [0]) 
     stream = get_log(2)
 
@@ -20,7 +24,7 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
 
     # inicia loop de solucao
     status = 3
-    z = 0
+    z = 0.0
     it = 0
     maxit = 100
     while status > 1
@@ -34,9 +38,6 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
         BAj = B \ N
         db = BAj
         
-        # x[bidx] = B \ b
-        # x[nidx] = zeros(length(nidx))
-
         # separa os custos em basicos/nao basicos
         cn = c[nidx]
         cb = c[bidx]
@@ -44,10 +45,10 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
         xb = x[bidx]
         xn = x[nidx]
         
-        # calcula custos
-        cr = cn' - cb' * db
+        # calcula custos reduzidos como vetor coluna
+        cr = cn - db' * cb
 
-        z = cb' * xb + (cr) * xn
+        z = dot(cb, xb) + dot(cr, xn)
 
         # escreve o log
         simplex_log(it, x, bidx, nidx, z, status, stream, debug)
@@ -58,7 +59,7 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
             status = 1
             if length(norder) > 1
                 println("norder")
-                new_x = zeros(x)
+                new_x = zero(x)
                 for i in 1:length(x)
                     new_x[norder[i]] = x[i]
                 end
@@ -77,21 +78,18 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
         end
         
         # seleciona proxima variavel basica
-        j = indmax(cr)
+        j = argmax(cr)
         
         # seleciona a variavel basica que sai
         r = xb ./ db[:, j]
-        # r[r .<= 0] = NaN
-        # i = indmin(r)
-        i=1
+        i = 1
         if it == 1
-            r[r .<= 0] = NaN
-            i = indmin(r)
+            r[r .<= 0] .= NaN
+            i = argmin(ifelse.(isnan.(r), Inf, r))
         else
             i = lexicographic_smallest(N, db[:, j])
         end
 
-        # r[r .<= 0] = NaN
         theta = r[i]
         
         # testa ilimitado
@@ -124,7 +122,7 @@ function SimplexFase2(A::Array, b::Array, c::Array, debug=true; norder::Array = 
     return x, z, status, it
 end
 
-function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, debug=true) 
+function SimplexFase1(A::Matrix{Float64}, b::Vector{Float64}, c::Vector{Float64}, debug=true) 
     stream = get_log(1)
 
     # pega n de variaveis basicas/ nao basicas originais
@@ -132,11 +130,11 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
     nv = n - m # numero de variaveis basicas
     
     # elimina  linhas com b negativo
-    A[b.<0,:] = -A[b.<0,:] 
-    b[b.<0,:] = -b[b.<0,:]
+    A[b.<0,:] .= -A[b.<0,:]
+    b[b.<0]   .= -b[b.<0]
 
     # adiciona a variavel de folga w
-    Aw = [A eye(m)]
+    Aw = [A Matrix{Float64}(I, m, m)]
     bw = b
     cw = [zeros(n); -ones(m)]
     
@@ -168,25 +166,21 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
         cn = cw[nidx]
         cb = cw[bidx]
 
-        # calcula custos
-        cr = cn' - cb' * db
-        z = cb' * xb + (cr) * xn
+        # calcula custos reduzidos como vetor coluna
+        cr = cn - db' * cb
+        z = dot(cb, xb) + dot(cr, xn)
         simplex_log(it, x, bidx, nidx, z, status, stream, debug)
 
         # seleciona proxima variavel basica
-        if it == 1
-            j = length(nidx)
-        else
-            j = indmax(cr)
-        end
+        j = argmax(cr)
 
         # seleciona a variavel basica que sai
         r = xb ./ db[:, j]
-        i=1
+        i = 1
         if it == 1
-            r[r .<= 0] = NaN
-            r[r .== Inf] = NaN
-            i = indmin(r)
+            r[r .<= 0] .= NaN
+            r[r .== Inf] .= NaN
+            i = argmin(ifelse.(isnan.(r), Inf, r))
         else
             i = lexicographic_smallest(N, db[:, j])
         end
@@ -198,7 +192,7 @@ function SimplexFase1(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64
             x = zeros(n+m)
             x[bidx] = xb
 
-            if cb'*xb > 0
+            if dot(cb, xb) > 0
                 print()
                 status = -2
             end
@@ -251,15 +245,16 @@ function lexicographic_smallest(N, Aj)
         if Aj[i] != 0
             r[i,:] = N[i,:] ./ Aj[i]
         else
-            r[i,:] = NaN
+            r[i,:] .= NaN
         end
     end
     
-    # inicia vetor
-    smallest = r[1,:]
-    index = 1
-    for i in 1:size(r)[1] # elimina NaN caso exista na inicializacao
-        if all(r[i,:] .>= 0) && all(r[i,:] .!= Inf) && lexless(r[i,:], smallest)
+    # inicia vetor — ignora a primeira linha se tiver NaN
+    index = findfirst(i -> all(r[i,:] .>= 0) && all(isfinite.(r[i,:])), 1:size(r,1))
+    index = isnothing(index) ? 1 : index
+    smallest = r[index,:]
+    for i in (index+1):size(r)[1] # elimina NaN caso exista na inicializacao
+        if all(r[i,:] .>= 0) && all(isfinite.(r[i,:])) && Tuple(r[i,:]) < Tuple(smallest)
             smallest = r[i,:]
             index = i
         end
@@ -275,26 +270,26 @@ function fix_artificial_var_in_B(Aw, bidx, nidx, art_idx)
         B = Aw[:, bidx]
         test = B \ Aw
 
-        l = findin(bidx, i)
+        l = findall(==(i), bidx)
         
         if all(test[l,:] .== 0) # removes row
-            Aw[l,:] = zeros(size(Aw)[2])
+            Aw[l,:] .= 0
 
         else # change basis
 
-            candidates = find(test[l,:])
+            candidates = findall(!iszero, test[l[1],:])
             candidates = [i for i in candidates if i in nidx && !(i in art_idx)]
             j = candidates[1]
             
             old_bidx = deepcopy(bidx)
-            bidx[l] = nidx[j] 
-            nidx[j] = old_bidx[l][1]
+            bidx[l[1]] = nidx[j] 
+            nidx[j] = old_bidx[l[1]]
             end
     end
     return bidx, nidx
 end
 
-function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, debug=true)
+function Simplex(A::Matrix{Float64}, b::Vector{Float64}, c::Vector{Float64}, debug=true)
     # Init logger
     open_log(A, b, c)
 
@@ -308,86 +303,6 @@ function Simplex(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1}, 
     end
 end
 
-function open_log(A::Array{Float64,2}, b::Array{Float64,1}, c::Array{Float64,1})
-    fname = "Simplex.log"
-    if isfile(fname)
-        stream = open(fname, "a")
-        pwrite(stream, "=======================")
-        pwrite(stream, "Comeco da Solucao do PL")
-        pwrite(stream, "=======================")
-        pwrite(stream, "Problema:")
-        pwrite(stream, "A = $A")
-        pwrite(stream, "b = $b")
-        pwrite(stream, "c = $c")
-        pwrite(stream, "")
-        close(stream)
-    else
-        stream = open(fname, "w")
-        pwrite(stream, "=======================")
-        pwrite(stream, "Comeco da Solucao do PL")
-        pwrite(stream, "=======================")
-        pwrite(stream, "Problema:")
-        pwrite(stream, "A = $A")
-        pwrite(stream, "b = $b")
-        pwrite(stream, "c = $c")
-        pwrite(stream, "")
-        close(stream)
-    end
-    nothing
-end
-
-function get_log(state::Int)
-    fname = "SimplexFase2.log"
-    stream = open(fname, "a")
-    if state == 1
-        pwrite(stream, "Simplex Fase 1")
-        pwrite(stream, "--------------")
-        
-    else
-        pwrite(stream, "Simplex Fase 2")
-        pwrite(stream, "--------------")
-
-    end
-    return stream
-end
-
-function simplex_log(it::Int, x::Array{Float64,1}, bidx::Array{Int,1}, nidx::Array{Int,1}, z::Float64, status::Int, stream::IOStream, debug=true)
-    pwrite(stream, "iter $it:", debug)
-    pwrite(stream, "x = $x", debug)
-    pwrite(stream, "Base = $bidx", debug)
-    pwrite(stream, "Nbase = $nidx", debug)
-    pwrite(stream, "", debug)
-    
-    if status == 1
-        pwrite(stream, "| Solucao otima obtida:", debug)
-        pwrite(stream, "| ---------------------", debug)
-        pwrite(stream, "| x = $x", debug)
-        pwrite(stream, "| z = $z", debug)
-        pwrite(stream, "| status = $status", debug)
-        pwrite(stream, "", debug)
-    elseif status == -1
-        pwrite(stream, "| Solucao ilimitada obtida:", debug)
-        pwrite(stream, "| -------------------------", debug)
-        pwrite(stream, "| de = $x", debug)
-        pwrite(stream, "| z = $z", debug)
-        pwrite(stream, "| status = $status", debug)
-        pwrite(stream, "", debug)
-    elseif status == -2
-        pwrite(stream, "| Solucao inviavel obtida:", debug)
-        pwrite(stream, "| -------------------------", debug)
-        pwrite(stream, "| z = $z", debug)
-        pwrite(stream, "| status = $status", debug)
-        pwrite(stream, "", debug)
-    end
-end
-
-function pwrite(stream::IOStream, string::AbstractString, debug)
-    if debug
-        println(string)
-    end
-    write(stream, string * "\n")
-end
-
 function problemas()
     cd(pwd())
     # 2)
@@ -395,25 +310,25 @@ function problemas()
     # a) Problema da Producao
     println("a) Problema da Producao")
     println("")
-    A = float([2 1 1 0; 1 2 0 1])
-    b = float([4 ; 4])
-    c = float([4 ; 3; 0; 0])
+    A = Float64[2 1 1 0; 1 2 0 1]
+    b = Float64[4; 4]
+    c = Float64[4; 3; 0; 0]
     x,z,status = SimplexFase2(A, b, c)
     
     # b) Prob 2
     println("b) Problema ilimitado")
     println("")
-    A = float([0.5 -1 1 0; -4 1 0 1])
-    b = float([0.5 ; 1])
-    c = float([1 ; 1; 0; 0])
+    A = Float64[0.5 -1 1 0; -4 1 0 1]
+    b = Float64[0.5; 1]
+    c = Float64[1; 1; 0; 0]
     x,z,status = SimplexFase2(A, b, c)
 
     # c) Prob 3 - fase 1
     println("c) Problema fase 1")
     println("")
-    A = float([2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1])
-    b = float([4 ; 4 ; -1])
-    c = float([4 ; 3; 0; 0; 0])
+    A = Float64[2 1 1 0 0; 1 2 0 1 0; -1 -1 0 0 1]
+    b = Float64[4; 4; -1]
+    c = Float64[4; 3; 0; 0; 0]
     x,z,status = Simplex(A, b, c)
 end
 
