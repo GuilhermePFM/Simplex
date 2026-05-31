@@ -1,44 +1,92 @@
-# Simplex
+# Simplex Benchmark
 
-Revised Simplex Method implementation in Julia.
+Cross-language implementation and benchmark of the **two-phase Revised Simplex Method**, comparing R, Python, Julia, C++, Go, and TypeScript.
 
 ---
 
-## What is the Simplex Algorithm?
+## Goal
 
-The Simplex Algorithm is the classical method for solving **Linear Programming (LP)** problems — optimization problems of the form:
+Each language implements the same algorithm against the same problem instances. The benchmark measures:
 
+- **Wall-clock time** — median solve time over 10 runs, excluding I/O and JIT warm-up where applicable
+- **Memory usage** — peak resident set size (RSS) during the solve
+
+All implementations are allowed to use each language's idiomatic linear-algebra library for the basis solve step (`B \ N`): NumPy, Eigen, BLAS/LAPACK bindings, etc. The simplex logic itself — pivot selection, ratio test, anti-cycling — must be implemented from scratch.
+
+---
+
+## Languages
+
+| Language   | LA library       | Entry point                  |
+|------------|------------------|------------------------------|
+| Julia      | `LinearAlgebra`  | `julia/Simplex.jl`           |
+| Python     | NumPy            | `python/simplex.py`          |
+| C++        | Eigen            | `cpp/simplex.cpp`            |
+| Go         | `gonum/mat`      | `go/simplex.go`              |
+| Rust          | base `solve()`   | `rust/simplex.R`                |
+| TypeScript | `mathjs`         | `ts/simplex.ts`              |
+
+---
+
+## Dataset — Netlib LP Test Suite
+
+The benchmark uses problems from the [Netlib LP library](https://www.netlib.org/lp/data/), the canonical test suite for LP solvers. Problems are distributed as `.mps` files with known optimal values, making them ideal for both performance measurement and correctness validation.
+
+### Selected problems
+
+| Problem    | Rows  | Columns | Optimal value  | Difficulty  |
+|------------|-------|---------|----------------|-------------|
+| `afiro`    | 27    | 51      | −464.753       | warm-up     |
+| `blend`    | 74    | 114     | −30.812        | small       |
+| `sc205`    | 205   | 317     | −52.202        | medium      |
+| `ship04l`  | 402   | 2,118   | 1,793,091.56   | large       |
+
+`afiro` and `blend` serve as correctness checks (compare final objective against the known optimum to within 1e-6). `sc205` and `ship04l` are the primary timing targets.
+
+### Obtaining the data
+
+```bash
+mkdir -p data
+for prob in afiro blend sc205 ship04l; do
+  curl -o data/${prob}.mps.gz \
+    https://www.netlib.org/lp/data/${prob}
+done
 ```
-maximize   c'x
-subject to Ax = b
-           x >= 0
-```
 
-It is used wherever a linear objective must be optimized under linear constraints, including:
-
-- **Production planning** — maximize profit given resource limits
-- **Transportation & logistics** — minimize shipping cost across routes
-- **Network flow** — route commodities optimally through a graph
-- **Finance** — portfolio allocation under budget and risk constraints
-- **Scheduling** — assign jobs to machines to minimize makespan
+All four problems are small enough to store in this repository under `data/` if preferred.
 
 ---
 
-## Why is it Good?
+## Benchmark Methodology
 
-Despite its worst-case exponential complexity, the Simplex Method is the workhorse of practical LP solvers because:
+1. **Parse** the `.mps` file into `(A, b, c)` — a shared parser is provided in `scripts/parse_mps.py` so each implementation reads identical matrices.
+2. **Warm up** — for JIT-compiled languages (Julia, TypeScript/V8), run one cold solve before timing begins.
+3. **Time** — run 10 solves; record median and standard deviation.
+4. **Memory** — measure peak RSS using `/usr/bin/time -v` (Linux) or `time.proc_time` / `valgrind --tool=massif` as appropriate.
+5. **Verify** — check that the returned objective matches the known optimum to within 1e-6.
 
-- **Empirically fast** — on real-world problems it takes O(m) to O(2m) pivot steps for an m-constraint problem, making it polynomial in practice.
-- **Exact solutions** — it walks along vertices of the feasible polytope and terminates at a certifiably optimal vertex, unlike gradient-based methods that only converge asymptotically.
-- **Rich termination info** — it correctly identifies three distinct outcomes: *optimal*, *unbounded*, and *infeasible*, and returns a certificate for each.
-- **Warm-starting** — an existing basis can be reused when problem data changes slightly, which is critical in branch-and-bound solvers for integer programming.
-- **Numerical stability** — the revised form re-solves the basis system `B x = N` at each pivot using an LU factorization, rather than carrying the full explicit tableau, keeping the working matrix small and better-conditioned.
+Results are written to `results/results.csv` by `scripts/run_benchmark.sh`.
 
 ---
 
-## How it Works
+## Results
 
-This implementation uses the **two-phase Revised Simplex Method** with **lexicographic anti-cycling**.
+> Results will be populated once all implementations are complete.
+
+| Language   | `sc205` median (ms) | `sc205` peak RSS (MB) | `ship04l` median (ms) | `ship04l` peak RSS (MB) |
+|------------|---------------------|-----------------------|-----------------------|-------------------------|
+| C++        |                     |                       |                       |                         |
+| Julia      |                     |                       |                       |                         |
+| Go         |                     |                       |                       |                         |
+| Python     |                     |                       |                       |                         |
+| TypeScript |                     |                       |                       |                         |
+| Rust          |                     |                       |                       |                         |
+
+---
+
+## How the Algorithm Works
+
+All six implementations follow the same specification.
 
 ### Core Idea
 
@@ -88,8 +136,6 @@ When the ratio test produces a tie (degenerate pivot), the algorithm could cycle
 
 ## Complexity
 
-The Simplex Algorithm has one of the most interesting complexity stories in computer science.
-
 ### Worst Case: Exponential
 
 Simplex is **not** a polynomial-time algorithm. The Klee-Minty cube (1972) is a family of LP instances where the standard simplex method (with the largest-coefficient pivot rule) visits all 2ⁿ vertices before finding the optimum. So worst-case complexity is **O(2ⁿ)**.
@@ -116,20 +162,3 @@ The gap between exponential worst case and fast practical performance was formal
 ### Open Problem: Strongly Polynomial LP
 
 Whether LP can be solved in time polynomial in m and n alone — independent of the magnitude of the coefficients — is still **unknown**. This is one of Smale's Millennium problems for mathematics and theoretical CS.
-
----
-
-## Usage
-
-```julia
-include("Simplex.jl")
-
-A = Float64[2 1 1 0;
-             1 2 0 1]
-b = Float64[4; 4]
-c = Float64[4; 3; 0; 0]
-
-x, z, status, it = Simplex(A, b, c)
-```
-
-If the initial basis is already known to be feasible, `SimplexFase2` can be called directly to skip Phase 1.
