@@ -32,7 +32,7 @@ Despite its worst-case exponential complexity, the Simplex Method is the workhor
 - **Exact solutions** — it walks along vertices of the feasible polytope and terminates at a certifiably optimal vertex, unlike gradient-based methods that only converge asymptotically.
 - **Rich termination info** — it correctly identifies three distinct outcomes: *optimal*, *unbounded*, and *infeasible*, and returns a certificate for each.
 - **Warm-starting** — an existing basis can be reused when problem data changes slightly, which is critical in branch-and-bound solvers for integer programming.
-- **Numerical stability** — the revised form (used here) maintains and updates a basis factorization B rather than recomputing it from scratch, reducing floating-point error accumulation.
+- **Numerical stability** — the revised form re-solves the basis system `B x = N` at each pivot using an LU factorization, rather than carrying the full explicit tableau, keeping the working matrix small and better-conditioned.
 
 ---
 
@@ -58,7 +58,7 @@ maximize  -sum(w)
 subject to [A | I] [x; w] = b,  x,w >= 0
 ```
 
-Starting with the identity basis (w = b), Phase 1 runs the simplex iterations. If it terminates with objective value 0, the artificials are driven out and we have a BFS for the original problem. Otherwise the problem is **infeasible**.
+Any row with `b[i] < 0` is negated first so that `b ≥ 0` holds, making the all-artificials basis `w = b` immediately feasible. Phase 1 then runs the simplex iterations. If it terminates with objective value 0, the artificials are driven out and we have a BFS for the original problem. Otherwise the problem is **infeasible**.
 
 ### Phase 2 — Optimizing
 
@@ -66,14 +66,14 @@ Given the BFS from Phase 1, Phase 2 iterates:
 
 1. **Compute reduced costs** `c_r = c_N' - c_B' B⁻¹ N`
 2. **Optimality check** — if all `c_r <= 0`, the current vertex is optimal; stop.
-3. **Entering variable** — pick the non-basic variable j with the largest (most positive) reduced cost (`indmax(c_r)`).
+3. **Entering variable** — pick the non-basic variable j with the largest (most positive) reduced cost (`argmax(c_r)`).
 4. **Ratio test (leaving variable)** — compute `θ = min { x_B[i] / (B⁻¹ A_j)[i] : (B⁻¹ A_j)[i] > 0 }`. The basic variable achieving the minimum leaves the basis.
    - If no ratio is finite, the problem is **unbounded** in direction d.
 5. **Pivot** — swap the entering and leaving variables; update x and the index sets.
 
 ### Anti-Cycling: Lexicographic Rule
 
-When the ratio test produces a tie (degenerate pivot), the algorithm could cycle forever. This implementation breaks ties using the **lexicographic smallest** rule: among tied rows, the one that is lexicographically smallest in the scaled non-basic matrix `N / A_j[i]` is chosen, guaranteeing finite termination.
+When the ratio test produces a tie (degenerate pivot), the algorithm could cycle forever. This implementation breaks ties using the **lexicographic smallest** rule: among tied rows, the one that is lexicographically smallest in the scaled non-basic matrix `N / (B⁻¹ A_j)[i]` is chosen, guaranteeing finite termination.
 
 ### Return Values
 
@@ -81,7 +81,7 @@ When the ratio test produces a tie (degenerate pivot), the algorithm could cycle
 |----------|---------|
 | `x`      | Optimal point (or extreme ray if unbounded) |
 | `z`      | Objective value at optimum |
-| `status` | `1` = optimal, `-1` = unbounded, `-2` = infeasible |
+| `status` | `1` = optimal, `-1` = unbounded, `-2` = iteration limit reached |
 | `it`     | Number of pivot iterations |
 
 ---
