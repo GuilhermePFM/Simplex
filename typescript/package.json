@@ -1,0 +1,15 @@
+{
+  "name": "simplex",
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "bench": "tsx benchmark/bench.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "tsx": "^4.11.0"
+  }
+}
