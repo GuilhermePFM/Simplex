@@ -1,6 +1,6 @@
 # Simplex Benchmark
 
-Cross-language implementation and benchmark of the **two-phase Revised Simplex Method**, comparing R, Python, Julia, C++, Go, and TypeScript.
+Cross-language implementation and benchmark of the **two-phase Revised Simplex Method**, comparing Rust Python, Julia, C++, Go, and TypeScript.
 
 ---
 
