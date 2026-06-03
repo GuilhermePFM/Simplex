@@ -22,7 +22,7 @@ All implementations are allowed to use each language's idiomatic linear-algebra 
 | Julia      | `LinearAlgebra`  | `julia/Simplex.jl`           |
 | Python     | NumPy            | `python/simplex.py`          |
 | C++        | Eigen            | `cpp/simplex.cpp`            |
-| Go         | `gonum/mat`      | `go/simplex.go`              |
+| Go         | Gonum `gonum/mat` (pure Go) | `go/simplex/`           |
 | Rust          | base `solve()`   | `rust/simplex.R`                |
 | TypeScript | `mathjs`         | `ts/simplex.ts`              |
 
