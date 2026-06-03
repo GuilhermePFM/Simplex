@@ -17,70 +17,95 @@ All implementations are allowed to use each language's idiomatic linear-algebra 
 
 ## Languages
 
-| Language   | LA library       | Entry point                  |
-|------------|------------------|------------------------------|
-| Julia      | `LinearAlgebra`  | `julia/Simplex.jl`           |
-| Python     | NumPy            | `python/simplex.py`          |
-| C++        | Eigen            | `cpp/simplex.cpp`            |
-| Go         | Gonum `gonum/mat` (pure Go) | `go/simplex/`           |
-| Rust          | base `solve()`   | `rust/simplex.R`                |
-| TypeScript | `mathjs`         | `ts/simplex.ts`              |
+Each language has two benchmark variants: one using the language's external LA library for the basis solve `B⁻¹N`, and one with a **hand-rolled LU factorization** (partial pivoting, no external dependency) matching the existing TypeScript implementation.
+
+| Language    | External LA library       | Hand-rolled LU benchmark         |
+|-------------|---------------------------|----------------------------------|
+| Julia       | `LinearAlgebra` (LAPACK)  | `julia/benchmark/bench_mps_lu.jl` |
+| Python      | SciPy `lu_factor/lu_solve`| `python/benchmark/bench_mps_lu.py`|
+| C++         | Eigen `PartialPivLU`      | `cpp/benchmark/bench_mps_lu.cpp` |
+| Go          | Gonum `mat.LU` (pure Go)  | `go/cmd/bench_mps_lu/`           |
+| Rust        | nalgebra `DMatrix::lu()`  | `rust/src/bin/bench_mps_lu.rs`   |
+| TypeScript  | hand-rolled LU (only)     | `typescript/benchmark/bench_mps.ts` |
 
 ---
 
 ## Dataset — Netlib LP Test Suite
 
-The benchmark uses problems from the [Netlib LP library](https://www.netlib.org/lp/data/), the canonical test suite for LP solvers. Problems are distributed as `.mps` files with known optimal values, making them ideal for both performance measurement and correctness validation.
+The benchmark uses problems from the [Netlib LP library](https://www.netlib.org/lp/data/), the canonical test suite for LP solvers. Problems are distributed in Netlib's compressed `emps` format (decoded by `scripts/decode_emps.py`, a Python port of David Gay's `emps.c`).
 
 ### Selected problems
 
-| Problem    | Rows  | Columns | Optimal value  | Difficulty  |
-|------------|-------|---------|----------------|-------------|
-| `afiro`    | 27    | 51      | −464.753       | warm-up     |
-| `blend`    | 74    | 114     | −30.812        | small       |
-| `sc205`    | 205   | 317     | −52.202        | medium      |
-| `ship04l`  | 402   | 2,118   | 1,793,091.56   | large       |
+| Problem    | Rows  | Columns | Optimal value  | Benchmark role  |
+|------------|-------|---------|----------------|-----------------|
+| `afiro`    | 27    | 51      | −464.753       | warm-up / correctness check |
+| `blend`    | 74    | 114     | −30.812        | small timing target |
+| `sc205`    | 205   | 317     | −52.202        | primary timing target |
+| `ship04l`  | 402   | 2,118   | 1,793,091.56   | reference only (see below) |
 
-`afiro` and `blend` serve as correctness checks (compare final objective against the known optimum to within 1e-6). `sc205` and `ship04l` are the primary timing targets.
+`afiro`, `blend`, and `sc205` are solved correctly by all implementations and used as the primary timing targets. `ship04l` is referenced in the README but exceeds the practical limit of dense simplex without sparse LU — see [analysis.md](analysis.md#6-ship04l-exceeds-the-practical-limit-of-dense-simplex).
 
-### Obtaining the data
+### Data files
+
+The `.mps` files in `data/` are in Netlib's compressed emps format. Pre-parsed JSON is committed at `data/{name}.json`. To re-parse from the `.mps` files:
 
 ```bash
-mkdir -p data
-for prob in afiro blend sc205 ship04l; do
-  curl -o data/${prob}.mps.gz \
-    https://www.netlib.org/lp/data/${prob}
-done
+python scripts/decode_emps.py data/afiro.mps > /tmp/afiro_std.mps
+# then re-run scripts/preparse_netlib.py (or the relevant section of run_benchmark.py)
 ```
-
-All four problems are small enough to store in this repository under `data/` if preferred.
 
 ---
 
 ## Benchmark Methodology
 
-1. **Parse** the `.mps` file into `(A, b, c)` — a shared parser is provided in `scripts/parse_mps.py` so each implementation reads identical matrices.
-2. **Warm up** — for JIT-compiled languages (Julia, TypeScript/V8), run one cold solve before timing begins.
-3. **Time** — run 10 solves; record median and standard deviation.
-4. **Memory** — measure peak RSS using `/usr/bin/time -v` (Linux) or `time.proc_time` / `valgrind --tool=massif` as appropriate.
-5. **Verify** — check that the returned objective matches the known optimum to within 1e-6.
+1. **Decode** — `scripts/decode_emps.py` converts Netlib's compressed emps format to standard MPS text.
+2. **Parse** — `scripts/parse_mps.py` converts the MPS file to `(A, b, c)` in standard equality form; all implementations read the same pre-parsed JSON.
+3. **Warm up** — JIT-compiled languages (Julia, TypeScript/V8) run two cold solves before timing begins.
+4. **Time** — run 10 solves; record median and standard deviation.
+5. **Memory** — measure peak RSS using `/usr/bin/time -v` (Linux).
+6. **Verify** — check that the returned objective matches the known Netlib optimum to within 1e-4 relative error.
 
-Results are written to `results/results.csv` by `scripts/run_benchmark.sh`.
+Results are written to `results/results.csv` by `scripts/run_benchmark.py`.
 
 ---
 
 ## Results
 
-> Results will be populated once all implementations are complete.
+Median of 10 runs; peak RSS from `/usr/bin/time -v`. All results verified against known optima (relative tolerance 1e-4).
 
-| Language   | `sc205` median (ms) | `sc205` peak RSS (MB) | `ship04l` median (ms) | `ship04l` peak RSS (MB) |
-|------------|---------------------|-----------------------|-----------------------|-------------------------|
-| C++        |                     |                       |                       |                         |
-| Julia      |                     |                       |                       |                         |
-| Go         |                     |                       |                       |                         |
-| Python     |                     |                       |                       |                         |
-| TypeScript |                     |                       |                       |                         |
-| Rust          |                     |                       |                       |                         |
+### Solve time (ms) on `sc205` (205×317, 42 pivot iterations)
+
+| Implementation  | LA backend      | `afiro` | `blend`  | `sc205`    |
+|-----------------|-----------------|---------|----------|------------|
+| Go              | Gonum mat       | 0.72    | 28.3     | 377        |
+| Julia           | LinearAlgebra   | 0.37    | 28.4     | 389        |
+| Python          | SciPy/OpenBLAS  | 1.78    | 39.4     | 445        |
+| C++             | Eigen           | 0.36    | 22.4     | 638        |
+| Rust            | nalgebra        | 0.50    | 29.5     | 783        |
+| TypeScript      | hand-rolled LU  | 5.65    | 257      | 5,485      |
+| C++-LU          | hand-rolled LU  | 0.76    | 63.5     | 2,052      |
+| Rust-LU         | hand-rolled LU  | 1.91    | 195      | 7,159      |
+| Go-LU           | hand-rolled LU  | 1.98    | 182      | 6,741      |
+| Julia-LU        | hand-rolled LU  | 5.88    | 477      | 14,801     |
+| Python-LU       | hand-rolled LU  | 77.6    | 3,344    | timeout    |
+
+### Peak RSS on `sc205`
+
+| Implementation | RSS (MB) |
+|----------------|----------|
+| Rust-LU        | 6.9      |
+| C++-LU         | 7.3      |
+| Rust           | 8.2      |
+| C++            | 8.9      |
+| Go-LU          | 11.2     |
+| Go             | 13.6     |
+| Python-LU      | 32.6     |
+| Python         | 61.3     |
+| TypeScript     | 231.7    |
+| Julia          | 456.9    |
+| Julia-LU       | 511.0    |
+
+For detailed analysis see [analysis.md](analysis.md).
 
 ---
 

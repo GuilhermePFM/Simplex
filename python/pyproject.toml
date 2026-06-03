@@ -6,7 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "simplex"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy", "scipy"]
+dependencies = [
+    "matplotlib>=3.10.9",
+    "numpy",
+    "scipy",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

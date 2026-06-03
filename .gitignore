@@ -2674,3 +2674,10 @@ cpp/build/CMakeFiles/simplex_lib.dir/src/preprocess.cpp.o
 cpp/build/CMakeFiles/simplex_lib.dir/src/preprocess.cpp.o.d
 cpp/build/CMakeFiles/simplex_lib.dir/src/simplex.cpp.o
 cpp/build/CMakeFiles/simplex_lib.dir/src/simplex.cpp.o.d
+python/src/simplex/__pycache__/__init__.cpython-312.pyc
+python/src/simplex/__pycache__/logger.cpython-312.pyc
+python/src/simplex/__pycache__/phase1.cpython-312.pyc
+python/src/simplex/__pycache__/phase2.cpython-312.pyc
+python/src/simplex/__pycache__/pivot.cpython-312.pyc
+python/src/simplex/__pycache__/preprocess.cpython-312.pyc
+python/src/simplex/__pycache__/types.cpython-312.pyc

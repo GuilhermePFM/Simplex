@@ -26,3 +26,8 @@ target_link_libraries(run_tests simplex_lib)
 
 add_executable(bench benchmark/bench.cpp)
 target_link_libraries(bench simplex_lib)
+
+add_executable(bench_mps benchmark/bench_mps.cpp)
+target_link_libraries(bench_mps simplex_lib)
+
+add_executable(bench_mps_lu benchmark/bench_mps_lu.cpp)

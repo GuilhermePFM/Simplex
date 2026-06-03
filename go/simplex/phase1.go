@@ -44,23 +44,16 @@ func Phase1(lp LinearProgram, rule PivotRule, logger SimplexLogger, maxit int, t
 	for it := 1; it <= maxit; it++ {
 		nb := len(nonbasic)
 
-		// B = Aw[:, basic], size m×m
-		B := colsOf(Aw, m, nw, basic)
-		// N = Aw[:, nonbasic], size m×nb
-		N := colsOf(Aw, m, nw, nonbasic)
+		B := colsFromRowMajor(Aw, m, nw, basic)
+		N := colsFromRowMajor(Aw, m, nw, nonbasic)
 
-		lu, piv := luFactor(B, m)
-		xb := luSolve(lu, piv, lp.B, m)
-		BinvN := luSolveMatrix(lu, piv, N, m, nb)
+		lu := factorBasis(B)
+		xb := solveVec(lu, lp.B)
+		BinvN := solveMat(lu, N)
+		binvNFlat := binvNToRowMajor(BinvN)
 
-		cb := gather(cw, basic)
-		// cr = cw[nonbasic] - BinvN' * cb
-		cr := gather(cw, nonbasic)
-		BinvNtcb := matTransposeVecMul(BinvN, m, nb, cb)
-		for j := 0; j < nb; j++ {
-			cr[j] -= BinvNtcb[j]
-		}
-		z := dot(cb, xb)
+		cr := reducedCosts(gather(cw, nonbasic), BinvN, gather(cw, basic))
+		z := dot(gather(cw, basic), xb)
 
 		logger.LogIteration(it, BasisState{copyInts(basic), copyInts(nonbasic)}, xb, z)
 
@@ -77,8 +70,8 @@ func Phase1(lp LinearProgram, rule PivotRule, logger SimplexLogger, maxit int, t
 			return BasisState{origBasic, origNonbasic}, Optimal
 		}
 
-		d := getCol(BinvN, m, nb, j)
-		i, ok := LeavingIndex(xb, d, BinvN, m, nb, tol)
+		d := denseCol(BinvN, j)
+		i, ok := LeavingIndex(xb, d, binvNFlat, m, nb, tol)
 		if !ok {
 			panic("Phase 1 is unexpectedly unbounded")
 		}
@@ -99,15 +92,15 @@ func fixArtificialsInBasis(Aw []float64, m, nw int, basic, nonbasic []int, artSt
 			if col < artStart {
 				continue
 			}
-			// Compute BinvAw = B^{-1} * Aw (full m×nw matrix)
-			B := colsOf(Aw, m, nw, basic)
-			lu, piv := luFactor(B, m)
-			BinvAw := luSolveMatrix(lu, piv, Aw, m, nw)
+			B := colsFromRowMajor(Aw, m, nw, basic)
+			lu := factorBasis(B)
+			AwMat := matFromRowMajor(Aw, m, nw)
+			BinvAw := solveMat(lu, AwMat)
 
 			// Look for a non-artificial non-basic column with non-zero entry in this row.
 			swapJ := -1
 			for j, ncol := range nonbasic {
-				if ncol < artStart && math.Abs(BinvAw[pos*nw+ncol]) > 1e-10 {
+				if ncol < artStart && math.Abs(BinvAw.At(pos, ncol)) > 1e-10 {
 					swapJ = j
 					break
 				}

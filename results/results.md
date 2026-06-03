@@ -1,11 +1,48 @@
-## ship04l
+## afiro
 
 | Language | Status | Median (ms) | Std (ms) | Peak RSS (MB) | Iterations |
 |---|---|---|---|---|---|
-| C++ | ERROR | ERR | ERR |  |  |
-| Rust | ERROR | ERR | ERR |  |  |
-| Go | ERROR | ERR | ERR |  |  |
-| Python | ERROR | ERR | ERR |  |  |
-| TypeScript | ERROR | ERR | ERR |  |  |
-| Julia | ERROR | ERR | ERR |  |  |
+| C++ | OK | 0.359 | 0.074 | 3.88 | 1 |
+| C++-LU | OK | 0.763 | 0.041 | 3.88 | 1 |
+| Rust | OK | 0.498 | 0.037 | 2.25 | 1 |
+| Rust-LU | OK | 1.907 | 0.269 | 2.12 | 1 |
+| Go | OK | 0.716 | 1.199 | 7.25 | 1 |
+| Go-LU | OK | 1.978 | 0.487 | 7.0 | 1 |
+| Python | OK | 1.778 | 0.640 | 51.83 | 1 |
+| Python-LU | OK | 77.612 | 4.760 | 32.62 | 1 |
+| TypeScript | OK | 5.655 | 2.175 | 99.89 | 1 |
+| Julia | OK | 0.367 | 0.036 | 416.48 | 1 |
+| Julia-LU | OK | 5.881 | 1.163 | 452.67 | 1 |
+
+## blend
+
+| Language | Status | Median (ms) | Std (ms) | Peak RSS (MB) | Iterations |
+|---|---|---|---|---|---|
+| C++ | OK | 22.442 | 0.470 | 4.48 | 23 |
+| C++-LU | OK | 63.541 | 3.084 | 4.08 | 36 |
+| Rust | OK | 29.507 | 0.547 | 3.0 | 32 |
+| Rust-LU | OK | 194.717 | 2.542 | 2.75 | 36 |
+| Go | OK | 28.343 | 1.080 | 7.71 | 33 |
+| Go-LU | OK | 181.654 | 3.054 | 7.58 | 36 |
+| Python | OK | 39.365 | 4.610 | 52.88 | 28 |
+| Python-LU | OK | 3343.947 | 63.864 | 32.62 | 38 |
+| TypeScript | OK | 256.450 | 37.282 | 155.35 | 27 |
+| Julia | OK | 28.402 | 30.656 | 432.23 | 28 |
+| Julia-LU | OK | 477.276 | 65.330 | 478.1 | 40 |
+
+## sc205
+
+| Language | Status | Median (ms) | Std (ms) | Peak RSS (MB) | Iterations |
+|---|---|---|---|---|---|
+| C++ | OK | 638.076 | 17.180 | 8.89 | 42 |
+| C++-LU | OK | 2051.647 | 20.735 | 7.25 | 56 |
+| Rust | OK | 782.662 | 10.507 | 8.23 | 28 |
+| Rust-LU | OK | 7158.652 | 125.079 | 6.94 | 56 |
+| Go | OK | 377.289 | 29.830 | 13.56 | 45 |
+| Go-LU | OK | 6740.624 | 65.957 | 11.19 | 56 |
+| Python | OK | 445.000 | 108.797 | 61.3 | 52 |
+| Python-LU | ERROR | ERR | ERR |  |  |
+| TypeScript | OK | 5485.476 | 151.068 | 231.71 | 57 |
+| Julia | OK | 388.897 | 59.881 | 456.91 | 46 |
+| Julia-LU | OK | 14801.322 | 307.456 | 511.04 | 36 |
 

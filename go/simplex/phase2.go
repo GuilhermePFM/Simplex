@@ -16,21 +16,16 @@ func Phase2(lp LinearProgram, initBasis BasisState, rule PivotRule, logger Simpl
 	for it := 1; it <= maxit; it++ {
 		nb := len(nonbasic)
 
-		B := colsOf(A, m, n, basic)
-		N := colsOf(A, m, n, nonbasic)
+		B := colsFromRowMajor(A, m, n, basic)
+		N := colsFromRowMajor(A, m, n, nonbasic)
 
-		lu, piv := luFactor(B, m)
-		xb := luSolve(lu, piv, b, m)
-		BinvN := luSolveMatrix(lu, piv, N, m, nb)
+		lu := factorBasis(B)
+		xb := solveVec(lu, b)
+		BinvN := solveMat(lu, N)
+		binvNFlat := binvNToRowMajor(BinvN)
 
-		cb := gather(c, basic)
-		// cr = c[nonbasic] - BinvN' * cb
-		cr := gather(c, nonbasic)
-		BinvNtcb := matTransposeVecMul(BinvN, m, nb, cb)
-		for j := 0; j < nb; j++ {
-			cr[j] -= BinvNtcb[j]
-		}
-		z := dot(cb, xb)
+		cr := reducedCosts(gather(c, nonbasic), BinvN, gather(c, basic))
+		z := dot(gather(c, basic), xb)
 
 		logger.LogIteration(it, BasisState{copyInts(basic), copyInts(nonbasic)}, xb, z)
 
@@ -44,8 +39,8 @@ func Phase2(lp LinearProgram, initBasis BasisState, rule PivotRule, logger Simpl
 			return SimplexResult{X: x, Z: z, Status: Optimal, Iterations: it}
 		}
 
-		d := getCol(BinvN, m, nb, j)
-		i, ok := LeavingIndex(xb, d, BinvN, m, nb, tol)
+		d := denseCol(BinvN, j)
+		i, ok := LeavingIndex(xb, d, binvNFlat, m, nb, tol)
 		if !ok {
 			// Unbounded: return extreme ray.
 			ray := make([]float64, n)
